@@ -1,0 +1,68 @@
+Here is a possible solution to your problem, using the OpenXml library to read and write the Excel file, and the StreamReader and StreamWriter classes to read and write the Javascript file:
+
+ 
+using System;
+using System.IO;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Spreadsheet;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        string excelFilePath = @"C:\example.xlsx";
+        string javascriptFilePath = @"C:\example.js";
+
+        using (SpreadsheetDocument excelDoc = SpreadsheetDocument.Open(excelFilePath, false))
+        using (StreamReader javascriptReader = new StreamReader(javascriptFilePath))
+        using (StreamWriter javascriptWriter = new StreamWriter(javascriptFilePath + ".temp"))
+        {
+            WorkbookPart workbookPart = excelDoc.WorkbookPart;
+            WorksheetPart worksheetPart = workbookPart.WorksheetParts.First();
+            Worksheet worksheet = worksheetPart.Worksheet;
+            SharedStringTablePart sharedStringsPart = workbookPart.GetPartsOfType<SharedStringTablePart>().FirstOrDefault();
+            SharedStringTable sharedStrings = sharedStringsPart != null ? sharedStringsPart.SharedStringTable : null;
+
+            foreach (var row in worksheet.GetFirstChild<SheetData>().Elements<Row>())
+            {
+                Cell bCell = row.Elements<Cell>().FirstOrDefault(c => c.CellReference.Value.StartsWith("B"));
+                Cell cCell = row.Elements<Cell>().FirstOrDefault(c => c.CellReference.Value.StartsWith("C"));
+                if (bCell != null && cCell != null)
+                {
+                    string bValue = GetCellValue(bCell, sharedStrings);
+                    string cValue = GetCellValue(cCell, sharedStrings);
+                    javascriptReader.BaseStream.Position = 0;
+                    javascriptWriter.BaseStream.SetLength(0);
+                    while (!javascriptReader.EndOfStream)
+                    {
+                        string line = javascriptReader.ReadLine();
+                        line = line.Replace(bValue, cValue);
+                        javascriptWriter.WriteLine(line);
+                    }
+                }
+            }
+        }
+
+        File.Delete(javascriptFilePath);
+        File.Move(javascriptFilePath + ".temp", javascriptFilePath);
+        Console.WriteLine("Done!");
+        Console.ReadLine();
+    }
+
+    static string GetCellValue(Cell cell, SharedStringTable sharedStrings)
+    {
+        if (cell.DataType != null && cell.DataType == CellValues.SharedString && sharedStrings != null)
+        {
+            int index = int.Parse(cell.InnerText);
+            return sharedStrings.ElementAt(index).InnerText;
+        }
+        else
+        {
+            return cell.InnerText;
+        }
+    }
+}
+ 
+
+Assuming that your Excel file has two columns with headers in row 1, named "B" and "C", and that your Javascript file contains text that needs to be replaced in the format "xxx B yyy", where "B" is one of the values in the Excel file, the program will read each row in the Excel file and replace all the occurrences of the value in column B with the value in column C in the Javascript file. The updated Javascript file will be saved as a temporary file and then renamed to the original filename, overwriting the original file. Note that this is just one possible implementation of the solution and may need to be adapted to your specific needs.
